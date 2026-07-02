@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -10,8 +12,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { TabScreenProps } from '../navigation/types';
-import { Avatar, Poster } from '../components/common';
-import { MOCK_SHOWS } from '../lib/mockShows';
+import { useAppState } from '../contexts/AppStateContext';
+import { Avatar, EmptyState, Poster } from '../components/common';
+import {
+  CATEGORIES,
+  SHOW_STATUS_LABEL,
+  type ShowGenre,
+  type ShowStatus,
+} from '../lib/shows';
 import { MOCK_USERS } from '../lib/mockUsers';
 import { normalizeText } from '../lib/text';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
@@ -27,13 +35,34 @@ type Result =
   | { type: 'show'; id: string; title: string; subtitle: string }
   | { type: 'person'; id: string; username: string };
 
+// Advanced filters (E04) — only apply to show results.
+type AdvancedFilters = {
+  genres: ShowGenre[];
+  minRating: number; // 0 = off
+  status: ShowStatus | null;
+};
+
+const NO_FILTERS: AdvancedFilters = { genres: [], minRating: 0, status: null };
+
+const MIN_RATING_OPTIONS = [3, 3.5, 4, 4.5];
+const STATUS_OPTIONS: ShowStatus[] = ['now', 'touring', 'finished'];
+
+function countActive(f: AdvancedFilters): number {
+  return f.genres.length + (f.minRating > 0 ? 1 : 0) + (f.status ? 1 : 0);
+}
+
 export default function SearchScreen({ navigation }: Props) {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<Record<Filter, boolean>>({
     shows: true,
     people: true,
   });
+  const [advanced, setAdvanced] = useState<AdvancedFilters>(NO_FILTERS);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  // Community rating is computed from all logs, so the ★-minimum filter uses
+  // the same numbers displayed on the Fiche Spectacle.
+  const { shows, showsLoading, getShowStats } = useAppState();
 
   // Auto-focus the keyboard whenever the tab gains focus.
   useFocusEffect(
@@ -51,29 +80,49 @@ export default function SearchScreen({ navigation }: Props) {
       return next;
     });
 
+  const toggleGenre = (g: ShowGenre) =>
+    setAdvanced((prev) => ({
+      ...prev,
+      genres: prev.genres.includes(g)
+        ? prev.genres.filter((x) => x !== g)
+        : [...prev.genres, g],
+    }));
+
+  const activeCount = countActive(advanced);
+
   const results = useMemo<Result[]>(() => {
     // Normalize the query so search is case- and accent-insensitive
     // (e.g. "moliere" matches "Molière").
     const q = normalizeText(query);
-    if (!q) return [];
+    // With active advanced filters, browse the catalogue even without text.
+    if (!q && activeCount === 0) return [];
     const out: Result[] = [];
     if (filters.shows) {
-      for (const s of MOCK_SHOWS) {
+      for (const s of shows) {
         // Match against title, company (artist/troupe) and venues.
         const haystack = normalizeText(
-          `${s.title} ${s.company} ${s.venues.join(' ')}`
+          `${s.title} ${s.company ?? ''} ${s.venues.join(' ')}`
         );
-        if (haystack.includes(q)) {
-          out.push({
-            type: 'show',
-            id: s.id,
-            title: s.title,
-            subtitle: s.venues[0],
-          });
-        }
+        if (q && !haystack.includes(q)) continue;
+        // Advanced filters stack on top of text search (shows only).
+        if (advanced.genres.length > 0 && !advanced.genres.includes(s.genre))
+          continue;
+        if (
+          advanced.minRating > 0 &&
+          getShowStats(s.id).rating < advanced.minRating
+        )
+          continue;
+        if (advanced.status && s.status !== advanced.status) continue;
+        out.push({
+          type: 'show',
+          id: s.id,
+          title: s.title,
+          subtitle: s.venues[0],
+        });
       }
     }
-    if (filters.people) {
+    // People results only make sense with a text query.
+    if (filters.people && q) {
       for (const u of MOCK_USERS) {
         if (normalizeText(u.username).includes(q)) {
           out.push({ type: 'person', id: u.id, username: u.username });
@@ -81,7 +130,7 @@ export default function SearchScreen({ navigation }: Props) {
       }
     }
     return out;
-  }, [query, filters]);
+  }, [query, filters, advanced, activeCount, getShowStats, shows]);
 
   const openResult = (r: Result) => {
     if (r.type === 'show') {
@@ -95,7 +144,7 @@ export default function SearchScreen({ navigation }: Props) {
 
   const renderBody = () => {
     // Empty state: recent searches.
-    if (!hasQuery) {
+    if (!hasQuery && activeCount === 0) {
       return (
         <View style={styles.body}>
           <Text style={styles.sectionLabel}>Recherches récentes</Text>
@@ -113,20 +162,30 @@ export default function SearchScreen({ navigation }: Props) {
       );
     }
 
+    if (showsLoading && filters.shows) {
+      return <ActivityIndicator style={styles.loading} color={colors.ink} />;
+    }
+
     // Zero results.
     if (results.length === 0) {
       return (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Aucun résultat</Text>
-          <Text style={styles.emptyText}>
-            Rien ne correspond à « {query.trim()} ».
-          </Text>
-          <Pressable
-            onPress={() => navigation.navigate('Main', { screen: 'Decouverte' })}
-          >
-            <Text style={styles.link}>Découvrir le catalogue →</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          icon="🔍"
+          title="Aucun résultat"
+          message={
+            hasQuery
+              ? `Rien ne correspond à « ${query.trim()} »${
+                  activeCount > 0 ? ' avec ces filtres' : ''
+                }.`
+              : 'Aucun spectacle ne correspond à ces filtres.'
+          }
+          ctaLabel={activeCount > 0 ? 'Effacer les filtres' : 'Découvrir le catalogue'}
+          onCtaPress={
+            activeCount > 0
+              ? () => setAdvanced(NO_FILTERS)
+              : () => navigation.navigate('Main', { screen: 'Decouverte' })
+          }
+        />
       );
     }
 
@@ -173,6 +232,7 @@ export default function SearchScreen({ navigation }: Props) {
           autoCorrect={false}
           returnKeyType="search"
           clearButtonMode="while-editing"
+          accessibilityLabel="Champ de recherche"
         />
       </View>
 
@@ -195,9 +255,133 @@ export default function SearchScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         ))}
+        {/* Advanced filters trigger — badge shows how many are active. */}
+        <Pressable
+          style={[styles.filterBtn, activeCount > 0 && styles.filterBtnCobalt]}
+          onPress={() => setSheetOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Filtres avancés, ${activeCount} actifs`}
+        >
+          <Text
+            style={[
+              styles.filterText,
+              activeCount > 0 && styles.filterTextOnCobalt,
+            ]}
+          >
+            Filtres{activeCount > 0 ? ` · ${activeCount}` : ''}
+          </Text>
+        </Pressable>
       </View>
 
       {renderBody()}
+
+      {/* Advanced filters sheet (E04) */}
+      <Modal
+        visible={sheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetOpen(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setSheetOpen(false)}
+        >
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Filtres</Text>
+              {activeCount > 0 ? (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setAdvanced(NO_FILTERS)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.clearAll}>Tout effacer</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <Text style={styles.sheetSection}>Genre</Text>
+            <View style={styles.chipWrap}>
+              {CATEGORIES.map((g) => {
+                const on = advanced.genres.includes(g);
+                return (
+                  <Pressable
+                    key={g}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() => toggleGenre(g)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      {g}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sheetSection}>Note minimum</Text>
+            <View style={styles.chipWrap}>
+              {MIN_RATING_OPTIONS.map((r) => {
+                const on = advanced.minRating === r;
+                return (
+                  <Pressable
+                    key={r}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() =>
+                      setAdvanced((prev) => ({
+                        ...prev,
+                        minRating: on ? 0 : r,
+                      }))
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      ★ {r.toFixed(1).replace('.', ',')}+
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.sheetSection}>Statut</Text>
+            <View style={styles.chipWrap}>
+              {STATUS_OPTIONS.map((s) => {
+                const on = advanced.status === s;
+                return (
+                  <Pressable
+                    key={s}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() =>
+                      setAdvanced((prev) => ({
+                        ...prev,
+                        status: on ? null : s,
+                      }))
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      {SHOW_STATUS_LABEL[s]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Pressable
+              style={styles.sheetClose}
+              onPress={() => setSheetOpen(false)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.sheetCloseText}>
+                Voir les résultats{activeCount > 0 ? ` (${activeCount} filtres)` : ''}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -219,6 +403,8 @@ const styles = StyleSheet.create({
   },
   // Filter pills — chip anatomy (full radius, mono label).
   filterBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
     borderWidth: border.rule,
     borderColor: colors.ink,
     borderRadius: radius.full,
@@ -230,12 +416,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     borderColor: colors.ink,
   },
+  filterBtnCobalt: {
+    backgroundColor: colors.cobalt,
+    borderColor: colors.ink,
+  },
   filterText: {
     ...type.labelSm,
     color: colors.ink,
   },
   filterTextActive: {
     color: colors.acid,
+  },
+  filterTextOnCobalt: {
+    color: colors.onCobalt,
   },
   body: {
     paddingHorizontal: spacing.md,
@@ -246,9 +439,11 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: spacing.xs,
   },
+  loading: { marginTop: spacing.xxl },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingVertical: spacing.sm,
   },
   recentIcon: {
@@ -284,24 +479,79 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingHorizontal: spacing.xl,
+
+  // Filters sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(10,10,10,0.4)',
+    justifyContent: 'flex-end',
   },
-  emptyTitle: {
+  sheet: {
+    backgroundColor: colors.paper,
+    borderTopWidth: border.rule,
+    borderColor: colors.ink,
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  sheetTitle: {
     ...type.headlineLg,
+    fontSize: 20,
     color: colors.ink,
+  },
+  clearAll: {
+    ...type.labelSm,
+    color: colors.signal,
+  },
+  sheetSection: {
+    ...type.labelSm,
+    color: colors.ink,
+    marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
-  emptyText: {
-    ...type.bodyMd,
-    color: colors.muted,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
-  link: {
+  chip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: border.rule,
+    borderColor: colors.ink,
+    borderRadius: radius.full,
+    backgroundColor: colors.bone,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  chipOn: {
+    backgroundColor: colors.ink,
+  },
+  chipText: {
     ...type.labelSm,
-    color: colors.cobalt,
+    color: colors.ink,
+  },
+  chipTextOn: {
+    color: colors.acid,
+  },
+  sheetClose: {
+    marginTop: spacing.lg,
+    minHeight: 52,
+    borderWidth: border.rule,
+    borderColor: colors.ink,
+    backgroundColor: colors.signal,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetCloseText: {
+    ...type.button,
+    fontSize: 13,
+    color: colors.onSignal,
   },
 });

@@ -1,9 +1,25 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
-import { Avatar, Poster, Rating } from '../components/common';
-import { border, colors, radius, spacing, type } from '../theme/tokens';
+import {
+  Avatar,
+  Poster,
+  PressableScale,
+  PulsePressable,
+  Rating,
+} from '../components/common';
+import { hapticSelect } from '../lib/haptics';
+import { shuffle } from '../lib/shuffle';
+import { border, colors, fonts, radius, spacing, type } from '../theme/tokens';
 import {
   MOCK_FEED,
   type CommunityActivityItem,
@@ -69,38 +85,62 @@ function CommunityCard({
 function DiscoveryCard({
   item,
   active,
+  logged,
+  finished,
+  stats,
   onOpenShow,
   onWishlist,
 }: {
   item: ShowDiscoveryItem;
   active: boolean;
+  logged: boolean;
+  finished: boolean;
+  stats: { rating: number; logCount: number };
   onOpenShow: (show: FeedShow) => void;
   onWishlist: (show: FeedShow) => void;
 }) {
+  // Wishlist rules (E07): logged shows read "Déjà vu", finished shows disable.
+  const disabled = logged || finished;
+  const label = logged
+    ? '✓ Déjà vu'
+    : finished
+    ? 'Terminé'
+    : active
+    ? '✓ Dans la wishlist'
+    : '+ Wishlist';
   return (
     <View style={[styles.card, styles.discoveryCard]}>
-      <Pressable onPress={() => onOpenShow(item.show)}>
+      <PressableScale onPress={() => onOpenShow(item.show)}>
         <Poster style={styles.showVisual} />
         <Text style={styles.discoveryTitle}>{item.show.title}</Text>
         <Text style={styles.venue}>{item.venue}</Text>
-        <Rating value={item.communityRating} />
-      </Pressable>
-      <Pressable
-        style={[styles.wishlistBtn, active && styles.wishlistBtnActive]}
-        onPress={() => onWishlist(item.show)}
+        {stats.logCount > 0 ? (
+          <Rating value={stats.rating} />
+        ) : (
+          <Text style={styles.noRating}>Aucun avis</Text>
+        )}
+      </PressableScale>
+      <PulsePressable
+        style={[
+          styles.wishlistBtn,
+          active && !disabled && styles.wishlistBtnActive,
+          disabled && styles.wishlistBtnDisabled,
+        ]}
+        onPress={() => !disabled && onWishlist(item.show)}
+        disabled={disabled}
         accessibilityRole="button"
-        accessibilityState={{ selected: active }}
+        accessibilityState={{ selected: active, disabled }}
         accessibilityLabel={`Ajouter ${item.show.title} à la wishlist`}
       >
         <Text
           style={[
             styles.wishlistBtnText,
-            active && styles.wishlistBtnTextActive,
+            active && !disabled && styles.wishlistBtnTextActive,
           ]}
         >
-          {active ? '✓ Dans la wishlist' : '+ Wishlist'}
+          {label}
         </Text>
-      </Pressable>
+      </PulsePressable>
     </View>
   );
 }
@@ -113,21 +153,73 @@ function EditorialCard({
   onOpenShow: (show: FeedShow) => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       style={[styles.card, styles.editorialCard]}
       onPress={() => onOpenShow(item.show)}
     >
       <Text style={styles.editorialTag}>ÉDITO OVATION</Text>
       <Text style={styles.editorialBlurb}>{item.blurb}</Text>
       <Text style={styles.editorialShow}>{item.show.title} →</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
 export default function FeedScreen({ navigation }: Props) {
-  // Wishlist state is shared app-wide so this button stays in sync with the
-  // Fiche Spectacle and Mon Carnet.
-  const { isWishlisted, toggleWishlist } = useAppState();
+  // Wishlist + logs are shared app-wide (real Supabase data) so this stays in
+  // sync with the Fiche Spectacle and Mon Carnet. MOCK_FEED itself (community
+  // activity from camille_p/theo.m/sofia + discovery/editorial cards) is
+  // still 100% mock — no real multi-user data is seeded yet — and its show
+  // ids ('s2', 's5'...) predate the real catalogue, so they won't resolve to
+  // a real show; tapping one shows "Spectacle introuvable" rather than
+  // crashing. See AppStateContext's module doc comment for the full gap list.
+  const {
+    isWishlisted,
+    toggleWishlist,
+    isLogged,
+    isBlocked,
+    logs,
+    unreadCount,
+    getShowStats,
+    getShowById,
+    currentUserId,
+    refreshShows,
+  } = useAppState();
+
+  // Pull-to-refresh: re-shuffles the still-mocked community/discovery/
+  // editorial stream (no real ranked query exists for it yet) AND refetches
+  // the real show catalogue, so both halves of this mixed screen refresh.
+  const [baseFeed, setBaseFeed] = useState<FeedItem[]>(MOCK_FEED);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshShows();
+    setBaseFeed(shuffle(MOCK_FEED));
+    setRefreshing(false);
+  };
+
+  // Feed = the mocked stream (minus blocked users) with the current user's most
+  // recent log prepended as their own community activity (E05 wiring).
+  const feed = useMemo<FeedItem[]>(() => {
+    const base = baseFeed.filter(
+      (i) => i.kind !== 'community' || !isBlocked(i.user.id)
+    );
+    const latest = [...logs].sort((a, b) => b.sortKey - a.sortKey)[0];
+    const show = latest ? getShowById(latest.showId) : undefined;
+    if (latest && show && currentUserId) {
+      const myCard: CommunityActivityItem = {
+        kind: 'community',
+        id: `me-${latest.id}`,
+        user: { id: currentUserId, username: 'malo', avatarUrl: null },
+        show: { id: show.id, title: show.title },
+        action: 'log',
+        rating: latest.rating,
+        reviewSnippet: latest.review ?? null,
+        date: latest.date,
+      };
+      return [myCard, ...base];
+    }
+    return base;
+  }, [baseFeed, logs, isBlocked, getShowById, currentUserId]);
 
   const openShow = (show: FeedShow) =>
     navigation.navigate('ShowDetail', { showId: show.id, title: show.title });
@@ -138,7 +230,10 @@ export default function FeedScreen({ navigation }: Props) {
       username: user.username,
     });
 
-  const onToggleWishlist = (show: FeedShow) => toggleWishlist(show.id);
+  const onToggleWishlist = (show: FeedShow) => {
+    hapticSelect();
+    toggleWishlist(show.id);
+  };
 
   const renderItem = ({ item }: { item: FeedItem }) => {
     switch (item.kind) {
@@ -155,6 +250,9 @@ export default function FeedScreen({ navigation }: Props) {
           <DiscoveryCard
             item={item}
             active={isWishlisted(item.show.id)}
+            logged={isLogged(item.show.id)}
+            finished={getShowById(item.show.id)?.status === 'finished'}
+            stats={getShowStats(item.show.id)}
             onOpenShow={openShow}
             onWishlist={onToggleWishlist}
           />
@@ -175,15 +273,28 @@ export default function FeedScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Notifications')}
         >
           <Text style={styles.bell}>🔔</Text>
+          {unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
       <FlatList
-        data={MOCK_FEED}
+        data={feed}
         keyExtractor={(item) => `${item.kind}-${item.id}`}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.ink}
+            colors={[colors.ink]}
+          />
+        }
       />
     </SafeAreaView>
   );
@@ -274,6 +385,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: spacing.xs,
   },
+  noRating: {
+    ...type.micro,
+    color: colors.muted,
+  },
   wishlistBtn: {
     marginTop: spacing.sm,
     borderWidth: border.rule,
@@ -285,6 +400,29 @@ const styles = StyleSheet.create({
   },
   wishlistBtnActive: {
     backgroundColor: colors.acid,
+  },
+  wishlistBtnDisabled: {
+    backgroundColor: colors.stock,
+    opacity: 0.6,
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: radius.full,
+    backgroundColor: colors.signal,
+    borderWidth: border.hair,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontFamily: fonts.monoBold,
+    fontSize: 9,
+    color: colors.onSignal,
   },
   wishlistBtnText: {
     ...type.button,

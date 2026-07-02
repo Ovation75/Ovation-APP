@@ -1,43 +1,45 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { RootStackScreenProps } from '../navigation/types';
-import { Avatar } from '../components/common';
-import { border, colors, radius, spacing, type } from '../theme/tokens';
 import {
-  MOCK_NOTIFICATIONS,
-  type NotificationItem,
-  type NotificationType,
-} from '../lib/mockNotifications';
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import type { RootStackScreenProps } from '../navigation/types';
+import { useAppState } from '../contexts/AppStateContext';
+import { Avatar, EmptyState } from '../components/common';
+import { hapticSelect } from '../lib/haptics';
+import { border, colors, radius, spacing, type } from '../theme/tokens';
+import { NOTIF_ICON, type NotificationItem } from '../lib/notifications';
 
 type Props = RootStackScreenProps<'Notifications'>;
 
 type Tab = 'all' | 'unread';
 
-const ICON: Record<NotificationType, string> = {
-  applause: '👏',
-  comment: '💬',
-  follow: '➕',
-  follow_request: '🔔',
-  editorial: '✨',
-};
-
 export default function NotificationsScreen({ navigation }: Props) {
+  // Read/unread + deletion live in the shared app state, backed by the real
+  // `notifications` table, so they persist across reloads (E10). NOTE: since
+  // there is no seeded real multi-user data yet, this list will stay empty
+  // in practice until another real user follows/applauds the current user.
+  const {
+    notifications,
+    notificationsLoading,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+  } = useAppState();
   const [tab, setTab] = useState<Tab>('all');
-  const [items, setItems] = useState<NotificationItem[]>(MOCK_NOTIFICATIONS);
 
   const visible = useMemo(
-    () => (tab === 'unread' ? items.filter((n) => !n.read) : items),
-    [items, tab]
+    () => (tab === 'unread' ? notifications.filter((n) => !n.read) : notifications),
+    [notifications, tab]
   );
-
-  const markAllRead = () =>
-    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
 
   const open = (n: NotificationItem) => {
     // Mark this one read, then navigate to its target.
-    setItems((prev) =>
-      prev.map((x) => (x.id === n.id ? { ...x, read: true } : x))
-    );
+    markNotificationRead(n.id);
     if (n.target.screen === 'Profile') {
       navigation.navigate('Profile', {
         userId: n.target.userId,
@@ -67,14 +69,33 @@ export default function NotificationsScreen({ navigation }: Props) {
             </Pressable>
           ))}
         </View>
-        <Pressable onPress={markAllRead} hitSlop={8}>
+        <Pressable
+          onPress={() => {
+            hapticSelect();
+            markAllNotificationsRead();
+          }}
+          hitSlop={12}
+          accessibilityRole="button"
+        >
           <Text style={styles.markRead}>Tout marquer comme lu</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {visible.length === 0 ? (
-          <Text style={styles.empty}>Aucune notification.</Text>
+        {notificationsLoading ? (
+          <ActivityIndicator style={styles.loading} color={colors.ink} />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon="🔔"
+            title={tab === 'unread' ? 'Tout est lu' : 'Aucune notification'}
+            message={
+              tab === 'unread'
+                ? 'Tu es à jour — aucune notification non lue.'
+                : 'Ton activité et les recos Ovation apparaîtront ici.'
+            }
+            ctaLabel={tab === 'unread' ? 'Voir toutes' : undefined}
+            onCtaPress={tab === 'unread' ? () => setTab('all') : undefined}
+          />
         ) : (
           visible.map((n) => (
             <Pressable
@@ -86,7 +107,7 @@ export default function NotificationsScreen({ navigation }: Props) {
                 <Avatar name={n.actorUsername} size={40} />
               ) : (
                 <View style={styles.editorialIcon}>
-                  <Text style={{ fontSize: 18 }}>{ICON[n.type]}</Text>
+                  <Text style={{ fontSize: 18 }}>{NOTIF_ICON[n.type]}</Text>
                 </View>
               )}
               <View style={styles.rowText}>
@@ -97,10 +118,22 @@ export default function NotificationsScreen({ navigation }: Props) {
                   {n.text}
                 </Text>
                 <Text style={styles.date}>
-                  {ICON[n.type]} {n.date}
+                  {NOTIF_ICON[n.type]} {n.date}
                 </Text>
               </View>
               {!n.read ? <View style={styles.dot} /> : null}
+              <Pressable
+                hitSlop={14}
+                onPress={() => {
+                  hapticSelect();
+                  deleteNotification(n.id);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Supprimer la notification"
+                style={styles.deleteBtn}
+              >
+                <Text style={styles.deleteText}>✕</Text>
+              </Pressable>
             </Pressable>
           ))
         )}
@@ -123,6 +156,8 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: spacing.xs },
   // Pill tabs — the chip anatomy (full radius) is sanctioned for tab counters.
   tab: {
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: radius.full,
     borderWidth: border.rule,
     borderColor: colors.ink,
@@ -170,10 +205,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.signal,
     marginLeft: spacing.xs,
   },
-  empty: {
-    ...type.bodySm,
-    color: colors.muted,
-    textAlign: 'center',
-    paddingVertical: 60,
+  deleteBtn: {
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.xxs,
   },
+  deleteText: { fontSize: 14, color: colors.muted },
+  loading: { marginTop: spacing.xxl },
 });

@@ -28,6 +28,9 @@ export type RootStackParamList = {
   Settings: undefined;
   CategoryList: { category: string };
   PlaylistDetail: { playlistId: string; name?: string };
+  // Log / rating flow (E05). No showId -> starts on the catalogue search step
+  // (Carnet "+"). With a showId -> jumps straight to rating (ShowDetail "Noter").
+  LogFlow: { showId?: string } | undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =

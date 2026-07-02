@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import type { RootStackScreenProps } from '../navigation/types';
+import { useAppState } from '../contexts/AppStateContext';
+import { hapticSelect } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
 
@@ -57,9 +59,12 @@ function Row({
 }
 
 export default function SettingsScreen({ navigation }: Props) {
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [socialEnabled, setSocialEnabled] = useState(true);
-  const [editorialEnabled, setEditorialEnabled] = useState(false);
+  // Notification toggles are centralized so they persist across navigation (E11).
+  const { notificationSettings, setNotificationSetting } = useAppState();
+  const toggleSetting = (key: 'push' | 'social' | 'editorial') => (v: boolean) => {
+    hapticSelect();
+    setNotificationSetting(key, v);
+  };
   const [signingOut, setSigningOut] = useState(false);
 
   const noop = () =>
@@ -107,8 +112,8 @@ export default function SettingsScreen({ navigation }: Props) {
           label="Notifications push"
           right={
             <Switch
-              value={pushEnabled}
-              onValueChange={setPushEnabled}
+              value={notificationSettings.push}
+              onValueChange={toggleSetting('push')}
               trackColor={{ false: colors.stock, true: colors.acid }}
               thumbColor={colors.ink}
               ios_backgroundColor={colors.stock}
@@ -119,8 +124,8 @@ export default function SettingsScreen({ navigation }: Props) {
           label="Activité sociale"
           right={
             <Switch
-              value={socialEnabled}
-              onValueChange={setSocialEnabled}
+              value={notificationSettings.social}
+              onValueChange={toggleSetting('social')}
               trackColor={{ false: colors.stock, true: colors.acid }}
               thumbColor={colors.ink}
               ios_backgroundColor={colors.stock}
@@ -131,8 +136,8 @@ export default function SettingsScreen({ navigation }: Props) {
           label="Recommandations éditoriales"
           right={
             <Switch
-              value={editorialEnabled}
-              onValueChange={setEditorialEnabled}
+              value={notificationSettings.editorial}
+              onValueChange={toggleSetting('editorial')}
               trackColor={{ false: colors.stock, true: colors.acid }}
               thumbColor={colors.ink}
               ios_backgroundColor={colors.stock}
@@ -150,6 +155,21 @@ export default function SettingsScreen({ navigation }: Props) {
         <Row label="Version" value={APP_VERSION} />
         <Row label="Conditions d'utilisation" onPress={noop} />
         <Row label="Politique de confidentialité" onPress={noop} />
+      </Section>
+
+      {/*
+        E12 (future) — internal admin/editorial workflows. Placeholders only for
+        now; a real admin panel will need Supabase + role-based access:
+          - Gestion du catalogue (add/edit/remove shows)
+          - Mise à jour hebdo des statuts (En ce moment / En tournée / Terminé)
+          - Sélection éditoriale (feed + reco de la semaine)
+          - Modération (reviews signalés, retrait de contenu, utilisateurs)
+      */}
+      <Section title="Espace interne (à venir)">
+        <Row label="Gestion du catalogue" value="À venir" onPress={noop} />
+        <Row label="Statuts hebdomadaires" value="À venir" onPress={noop} />
+        <Row label="Sélection éditoriale" value="À venir" onPress={noop} />
+        <Row label="Modération" value="À venir" onPress={noop} />
       </Section>
 
       <Pressable

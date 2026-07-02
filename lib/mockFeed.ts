@@ -1,6 +1,10 @@
 // Mocked feed data for E02. Hardcoded sample content that matches the card
-// shapes in specs/02-screens.md. Nothing here is wired to Supabase yet —
-// see the Feed screen notes for what needs to be replaced with real queries.
+// shapes in specs/02-screens.md. Still mock (no real multi-user activity is
+// seeded yet), but the `show` ids now reference real catalogue rows via
+// DEMO_SHOW_IDS — so once scripts/seed-catalogue.sql has been run, tapping a
+// card opens a real ShowDetail instead of "Spectacle introuvable".
+
+import { DEMO_SHOW_IDS } from './demoCatalogueIds';
 
 export type FeedUser = {
   id: string;
@@ -38,7 +42,7 @@ export type ShowDiscoveryItem = {
   id: string;
   show: FeedShow;
   venue: string;
-  communityRating: number; // 0–5
+  // communityRating removed — computed via AppStateContext.getShowStats.
 };
 
 // Card 3 — editorial: an Ovation-written blurb linking to a show.
@@ -60,7 +64,7 @@ export const MOCK_FEED: FeedItem[] = [
     kind: 'community',
     id: 'c1',
     user: { id: 'u1', username: 'camille_p', avatarUrl: null },
-    show: { id: 's1', title: 'Le Malade imaginaire' },
+    show: { id: DEMO_SHOW_IDS.malade, title: 'Le Malade imaginaire' },
     action: 'log',
     rating: 4.5,
     reviewSnippet:
@@ -70,37 +74,35 @@ export const MOCK_FEED: FeedItem[] = [
   {
     kind: 'discovery',
     id: 'd1',
-    show: { id: 's2', title: 'Cyrano de Bergerac' },
+    show: { id: DEMO_SHOW_IDS.cyrano, title: 'Cyrano de Bergerac' },
     venue: 'Théâtre de la Porte Saint-Martin',
-    communityRating: 4.2,
   },
   {
     kind: 'editorial',
     id: 'e1',
     blurb:
       'Notre coup de cœur de la semaine : une relecture audacieuse d’un classique, à ne pas manquer avant la fin de la tournée.',
-    show: { id: 's3', title: 'En attendant Godot' },
+    show: { id: DEMO_SHOW_IDS.godot, title: 'En attendant Godot' },
   },
   {
     kind: 'community',
     id: 'c2',
     user: { id: 'u2', username: 'theo.m', avatarUrl: null },
-    show: { id: 's4', title: 'La Cantatrice chauve' },
+    show: { id: DEMO_SHOW_IDS.cantatrice, title: 'La Cantatrice chauve' },
     action: 'favorite',
     date: 'il y a 3 j',
   },
   {
     kind: 'discovery',
     id: 'd2',
-    show: { id: 's5', title: 'Roméo et Juliette' },
+    show: { id: DEMO_SHOW_IDS.romeo, title: 'Roméo et Juliette' },
     venue: 'Comédie-Française',
-    communityRating: 4.7,
   },
   {
     kind: 'community',
     id: 'c3',
     user: { id: 'u3', username: 'sofia', avatarUrl: null },
-    show: { id: 's6', title: 'Huis clos' },
+    show: { id: DEMO_SHOW_IDS.huisClos, title: 'Huis clos' },
     action: 'log',
     rating: 3.5,
     reviewSnippet: null,

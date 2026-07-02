@@ -1,4 +1,5 @@
-import { Text } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { TabParamList } from './types';
 import SearchScreen from '../screens/SearchScreen';
@@ -16,6 +17,37 @@ const ICONS: Record<keyof TabParamList, string> = {
   Decouverte: '✨',
   MonCarnet: '📖',
 };
+
+// Tab icon that pops (scale spring) whenever its tab becomes focused.
+function TabIcon({
+  icon,
+  color,
+  focused,
+}: {
+  icon: string;
+  color: string;
+  focused: boolean;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (focused) {
+      scale.setValue(0.8);
+      Animated.spring(scale, {
+        toValue: 1,
+        friction: 4,
+        tension: 120,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [focused, scale]);
+
+  return (
+    <Animated.Text style={{ fontSize: 18, color, transform: [{ scale }] }}>
+      {icon}
+    </Animated.Text>
+  );
+}
 
 export default function MainTabs() {
   return (
@@ -36,8 +68,8 @@ export default function MainTabs() {
           letterSpacing: 1,
           textTransform: 'uppercase',
         },
-        tabBarIcon: ({ color }) => (
-          <Text style={{ fontSize: 18, color }}>{ICONS[route.name]}</Text>
+        tabBarIcon: ({ color, focused }) => (
+          <TabIcon icon={ICONS[route.name]} color={color} focused={focused} />
         ),
       })}
     >
