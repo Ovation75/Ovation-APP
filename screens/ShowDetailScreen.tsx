@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,7 @@ import {
   PulsePressable,
   Rating,
 } from '../components/common';
+import { HeaderIconButton } from '../components/AppHeader';
 import { hapticImpact, hapticSelect } from '../lib/haptics';
 import { shareReview, shareShow } from '../lib/share';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
@@ -76,6 +77,20 @@ export default function ShowDetailScreen({ route, navigation }: Props) {
           getApplause(a.id, BASE_APPLAUSE[a.id] ?? 0)
       );
   }, [show, isBlocked, getApplause, currentUserId]);
+
+  // Share action in the native header (reuses the shared HeaderIconButton).
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        show ? (
+          <HeaderIconButton
+            icon="↗"
+            accessibilityLabel="Partager le spectacle"
+            onPress={() => shareShow(show.title, show.venues[0])}
+          />
+        ) : undefined,
+    });
+  }, [navigation, show]);
 
   if (showsLoading) {
     return (

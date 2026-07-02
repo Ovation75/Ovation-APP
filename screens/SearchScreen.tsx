@@ -10,9 +10,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, DrawerActions } from '@react-navigation/native';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
+import { AppHeader } from '../components/AppHeader';
 import { Avatar, EmptyState, Poster } from '../components/common';
 import {
   CATEGORIES,
@@ -62,7 +63,9 @@ export default function SearchScreen({ navigation }: Props) {
   const inputRef = useRef<TextInput>(null);
   // Community rating is computed from all logs, so the ★-minimum filter uses
   // the same numbers displayed on the Fiche Spectacle.
-  const { shows, showsLoading, getShowStats } = useAppState();
+  const { shows, showsLoading, getShowStats, myProfile, unreadCount } = useAppState();
+
+  const openDrawer = () => navigation.dispatch(DrawerActions.openDrawer());
 
   // Auto-focus the keyboard whenever the tab gains focus.
   useFocusEffect(
@@ -183,7 +186,11 @@ export default function SearchScreen({ navigation }: Props) {
           onCtaPress={
             activeCount > 0
               ? () => setAdvanced(NO_FILTERS)
-              : () => navigation.navigate('Main', { screen: 'Decouverte' })
+              : () =>
+                  navigation.navigate('Main', {
+                    screen: 'Tabs',
+                    params: { screen: 'Decouverte' },
+                  })
           }
         />
       );
@@ -222,6 +229,19 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <AppHeader
+        title="Recherche"
+        onOpenDrawer={openDrawer}
+        avatarName={myProfile?.username ?? '?'}
+        actions={[
+          {
+            icon: '🔔',
+            accessibilityLabel: 'Notifications',
+            badge: unreadCount,
+            onPress: () => navigation.navigate('Notifications'),
+          },
+        ]}
+      />
       <View style={styles.searchWrap}>
         <ThemedInput
           ref={inputRef}

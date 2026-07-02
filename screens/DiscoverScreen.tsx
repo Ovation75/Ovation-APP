@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DrawerActions } from '@react-navigation/native';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
+import { AppHeader } from '../components/AppHeader';
 import { EmptyState, Poster, PressableScale, Rating } from '../components/common';
 import { CATEGORIES } from '../lib/shows';
 import type { Show } from '../lib/shows';
@@ -48,9 +50,11 @@ function ShowCardH({
 }
 
 export default function DiscoverScreen({ navigation }: Props) {
-  const { shows, showsLoading, showsError, refreshShows, getShowStats } =
+  const { shows, showsLoading, showsError, refreshShows, getShowStats, myProfile, unreadCount } =
     useAppState();
   const [refreshing, setRefreshing] = useState(false);
+
+  const openDrawer = () => navigation.dispatch(DrawerActions.openDrawer());
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -98,9 +102,19 @@ export default function DiscoverScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Découverte</Text>
-      </View>
+      <AppHeader
+        title="Découverte"
+        onOpenDrawer={openDrawer}
+        avatarName={myProfile?.username ?? '?'}
+        actions={[
+          {
+            icon: '🔔',
+            accessibilityLabel: 'Notifications',
+            badge: unreadCount,
+            onPress: () => navigation.navigate('Notifications'),
+          },
+        ]}
+      />
       {showsLoading ? (
         <ActivityIndicator style={styles.loading} color={colors.ink} />
       ) : showsError ? (
@@ -157,16 +171,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.paper,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: border.rule,
-    borderBottomColor: colors.ink,
-  },
-  headerTitle: {
-    ...type.displayMd,
-    color: colors.ink,
   },
   loading: { marginTop: spacing.xxl },
   section: {

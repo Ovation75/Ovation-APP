@@ -19,6 +19,16 @@ export function shareShow(title: string, venue?: string): void {
   Share.share({ message: lines.join('\n') }).catch(() => {});
 }
 
+// Share a profile (from Mon Profil). Text-only until public profile URLs exist.
+export function shareProfile(username: string, bio?: string | null): void {
+  const lines = [
+    `@${username} sur Ovation 🎭`,
+    bio ? bio : null,
+    'Rejoins-moi pour noter et partager des spectacles.',
+  ].filter(Boolean);
+  Share.share({ message: lines.join('\n') }).catch(() => {});
+}
+
 // Share a log/review (own or someone else's).
 export function shareReview(
   username: string,

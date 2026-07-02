@@ -125,6 +125,9 @@ type AppState = {
   myProfileLoading: boolean;
   followerCount: number;
   followingCount: number;
+  // Persists profile edits (username/bio/is_public — the only editable columns
+  // that exist on the profiles table) and updates local state optimistically.
+  updateMyProfile: (fields: MyProfile) => Promise<{ error: string | null }>;
 
   // ---- Show catalogue (E08) --------------------------------------------
   shows: Show[];
@@ -356,6 +359,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setFollowingCount(followingRes.count ?? 0);
     setMyProfileLoading(false);
   }, [handleError]);
+
+  // Only writes the columns that exist on `profiles` (username, bio, is_public).
+  // display_name / avatar have no column and are intentionally not persisted.
+  const updateMyProfile = useCallback(
+    async (fields: MyProfile) => {
+      if (!currentUserId) return { error: 'Non connecté.' };
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          username: fields.username,
+          bio: fields.bio,
+          is_public: fields.isPublic,
+        })
+        .eq('id', currentUserId);
+      const msg = handleError(error, 'Impossible de mettre à jour le profil.');
+      if (msg) return { error: msg };
+      setMyProfile(fields);
+      return { error: null };
+    },
+    [currentUserId, handleError]
+  );
 
   // ---- Show catalogue -----------------------------------------------------
   const [shows, setShows] = useState<Show[]>([]);
@@ -1197,6 +1221,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       myProfileLoading,
       followerCount,
       followingCount,
+      updateMyProfile,
       shows,
       showsLoading,
       showsError,
@@ -1264,6 +1289,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       myProfileLoading,
       followerCount,
       followingCount,
+      updateMyProfile,
       shows,
       showsLoading,
       showsError,

@@ -11,6 +11,7 @@ import {
 import type { RootStackScreenProps } from '../navigation/types';
 import { useAppState, type MyStats } from '../contexts/AppStateContext';
 import { Avatar, PulsePressable, Rating } from '../components/common';
+import { HeaderIconButton } from '../components/AppHeader';
 import { hapticImpact, hapticSelect } from '../lib/haptics';
 import { getUserById } from '../lib/mockUsers';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
@@ -111,20 +112,19 @@ export default function ProfileScreen({ route, navigation }: Props) {
     if (isMe) {
       navigation.setOptions({
         headerRight: () => (
-          <Pressable
-            hitSlop={12}
-            onPress={() => navigation.navigate('Settings')}
+          <HeaderIconButton
+            icon="⚙️"
             accessibilityLabel="Paramètres"
-          >
-            <Text style={{ fontSize: 20 }}>⚙️</Text>
-          </Pressable>
+            onPress={() => navigation.navigate('Settings')}
+          />
         ),
       });
     } else if (user) {
       navigation.setOptions({
         headerRight: () => (
-          <Pressable
-            hitSlop={12}
+          <HeaderIconButton
+            icon="⋯"
+            accessibilityLabel="Options"
             onPress={() =>
               Alert.alert(`@${user.username}`, undefined, [
                 { text: 'Annuler', style: 'cancel' },
@@ -145,10 +145,7 @@ export default function ProfileScreen({ route, navigation }: Props) {
                 },
               ])
             }
-            accessibilityLabel="Options"
-          >
-            <Text style={{ fontSize: 22 }}>⋯</Text>
-          </Pressable>
+          />
         ),
       });
     }

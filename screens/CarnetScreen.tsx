@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DrawerActions } from '@react-navigation/native';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
+import { AppHeader } from '../components/AppHeader';
 import { EmptyState, Poster, PressableScale, Rating } from '../components/common';
 import { hapticSelect, hapticSuccess } from '../lib/haptics';
 import { ThemedInput } from '../theme/components';
@@ -29,8 +31,8 @@ const SUBTABS: { key: SubTab; label: string }[] = [
   { key: 'wishlist', label: 'Wishlist' },
 ];
 
-export default function CarnetScreen({ navigation }: Props) {
-  const [tab, setTab] = useState<SubTab>('journal');
+export default function CarnetScreen({ navigation, route }: Props) {
+  const [tab, setTab] = useState<SubTab>(route.params?.tab ?? 'journal');
   // Journal, playlists and wishlist all come from shared app state so any
   // add/remove/log from another screen stays in sync here.
   const {
@@ -45,7 +47,11 @@ export default function CarnetScreen({ navigation }: Props) {
     createPlaylist,
     getShowById,
     showsLoading,
+    myProfile,
+    unreadCount,
   } = useAppState();
+
+  const openDrawer = () => navigation.dispatch(DrawerActions.openDrawer());
 
   // Create-playlist modal (local form state only).
   const [createOpen, setCreateOpen] = useState(false);
@@ -54,6 +60,18 @@ export default function CarnetScreen({ navigation }: Props) {
   const [plName, setPlName] = useState('');
   const [plEmoji, setPlEmoji] = useState(EMOJI_CHOICES[0]);
   const [plPublic, setPlPublic] = useState(true);
+
+  // Honor deep-link params from the Mon Profil quick actions (preselect a
+  // sub-tab, optionally pop the create-playlist dialog).
+  const paramTab = route.params?.tab;
+  const paramCreate = route.params?.create;
+  useEffect(() => {
+    if (paramTab) setTab(paramTab);
+    if (paramCreate) {
+      setTab('playlists');
+      setCreateOpen(true);
+    }
+  }, [paramTab, paramCreate]);
 
   const submitCreate = async () => {
     if (!plName.trim() || creating) return;
@@ -88,9 +106,19 @@ export default function CarnetScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mon Carnet</Text>
-      </View>
+      <AppHeader
+        title="Mon Carnet"
+        onOpenDrawer={openDrawer}
+        avatarName={myProfile?.username ?? '?'}
+        actions={[
+          {
+            icon: '🔔',
+            accessibilityLabel: 'Notifications',
+            badge: unreadCount,
+            onPress: () => navigation.navigate('Notifications'),
+          },
+        ]}
+      />
 
       {/* Segmented control — BROADSIDE framed tabs joined by shared ink walls */}
       <View style={styles.segment}>
@@ -346,14 +374,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.paper,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  headerTitle: {
-    ...type.displayMd,
-    color: colors.ink,
   },
   segment: {
     flexDirection: 'row',

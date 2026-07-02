@@ -7,6 +7,7 @@ import {
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import * as SplashScreenModule from 'expo-splash-screen';
 import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
@@ -24,7 +25,7 @@ import {
 import type { RootStackParamList } from './navigation/types';
 import { AppStateProvider, useAppState } from './contexts/AppStateContext';
 import { colors, fonts } from './theme/tokens';
-import MainTabs from './navigation/MainTabs';
+import MainDrawer from './navigation/MainDrawer';
 import SplashScreen from './screens/SplashScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import SignupScreen from './screens/SignupScreen';
@@ -32,6 +33,8 @@ import LoginScreen from './screens/LoginScreen';
 import ProfileSetupScreen from './screens/ProfileSetupScreen';
 import ShowDetailScreen from './screens/ShowDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import MyProfileScreen from './screens/MyProfileScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import CategoryListScreen from './screens/CategoryListScreen';
@@ -110,6 +113,7 @@ export default function App() {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <NavigationContainer ref={navigationRef} theme={navTheme}>
         {/* Shared interactive state (logs, wishlist, playlists, follows,
@@ -138,10 +142,11 @@ export default function App() {
           <Stack.Screen name="Signup" component={SignupScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-          {/* Tab navigator hosts Recherche / Feed / Découverte / Mon Carnet. */}
+          {/* Drawer hosts the tab navigator (Recherche / Feed / Découverte /
+              Mon Carnet) plus the profile side panel. */}
           <Stack.Screen
             name="Main"
-            component={MainTabs}
+            component={MainDrawer}
             options={{ animation: 'fade' }}
           />
           {/* Detail / modal-ish screens push on top of the tabs. */}
@@ -154,6 +159,18 @@ export default function App() {
             name="Profile"
             component={ProfileScreen}
             options={{ ...detailHeaderOptions, title: '' }}
+          />
+          {/* Own-profile hub + editor (E09). These render their own AppHeader,
+              so the native stack header is hidden. */}
+          <Stack.Screen
+            name="MyProfile"
+            component={MyProfileScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="Notifications"
@@ -192,5 +209,6 @@ export default function App() {
       </NavigationContainer>
       <StatusBar style="dark" />
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

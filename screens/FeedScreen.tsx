@@ -8,8 +8,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DrawerActions } from '@react-navigation/native';
 import type { TabScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
+import { AppHeader } from '../components/AppHeader';
 import {
   Avatar,
   Poster,
@@ -19,7 +21,7 @@ import {
 } from '../components/common';
 import { hapticSelect } from '../lib/haptics';
 import { shuffle } from '../lib/shuffle';
-import { border, colors, fonts, radius, spacing, type } from '../theme/tokens';
+import { border, colors, radius, spacing, type } from '../theme/tokens';
 import {
   MOCK_FEED,
   type CommunityActivityItem,
@@ -183,7 +185,10 @@ export default function FeedScreen({ navigation }: Props) {
     getShowById,
     currentUserId,
     refreshShows,
+    myProfile,
   } = useAppState();
+
+  const openDrawer = () => navigation.dispatch(DrawerActions.openDrawer());
 
   // Pull-to-refresh: re-shuffles the still-mocked community/discovery/
   // editorial stream (no real ranked query exists for it yet) AND refetches
@@ -264,22 +269,19 @@ export default function FeedScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>Ovation</Text>
-        <Pressable
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Notifications"
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Text style={styles.bell}>🔔</Text>
-          {unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount}</Text>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
+      <AppHeader
+        title="Ovation"
+        onOpenDrawer={openDrawer}
+        avatarName={myProfile?.username ?? '?'}
+        actions={[
+          {
+            icon: '🔔',
+            accessibilityLabel: 'Notifications',
+            badge: unreadCount,
+            onPress: () => navigation.navigate('Notifications'),
+          },
+        ]}
+      />
 
       <FlatList
         data={feed}
@@ -304,23 +306,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.paper,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: border.rule,
-    borderBottomColor: colors.ink,
-  },
-  logo: {
-    ...type.displayMd,
-    fontSize: 28,
-    color: colors.ink,
-  },
-  bell: {
-    fontSize: 20,
   },
   listContent: {
     padding: spacing.md,
@@ -404,25 +389,6 @@ const styles = StyleSheet.create({
   wishlistBtnDisabled: {
     backgroundColor: colors.stock,
     opacity: 0.6,
-  },
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: radius.full,
-    backgroundColor: colors.signal,
-    borderWidth: border.hair,
-    borderColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    fontFamily: fonts.monoBold,
-    fontSize: 9,
-    color: colors.onSignal,
   },
   wishlistBtnText: {
     ...type.button,
