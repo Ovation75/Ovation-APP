@@ -37,6 +37,9 @@ import MyProfileScreen from './screens/MyProfileScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import PreferencesScreen from './screens/PreferencesScreen';
+import BlockedUsersScreen from './screens/BlockedUsersScreen';
+import ReportsSentScreen from './screens/ReportsSentScreen';
 import CategoryListScreen from './screens/CategoryListScreen';
 import PlaylistDetailScreen from './screens/PlaylistDetailScreen';
 import LogFlowScreen from './screens/LogFlowScreen';
@@ -181,6 +184,21 @@ export default function App() {
             name="Settings"
             component={SettingsScreen}
             options={{ ...detailHeaderOptions, title: 'Paramètres' }}
+          />
+          <Stack.Screen
+            name="Preferences"
+            component={PreferencesScreen}
+            options={{ ...detailHeaderOptions, title: 'Préférences' }}
+          />
+          <Stack.Screen
+            name="BlockedUsers"
+            component={BlockedUsersScreen}
+            options={{ ...detailHeaderOptions, title: 'Utilisateurs bloqués' }}
+          />
+          <Stack.Screen
+            name="ReportsSent"
+            component={ReportsSentScreen}
+            options={{ ...detailHeaderOptions, title: 'Signalements envoyés' }}
           />
           <Stack.Screen
             name="CategoryList"

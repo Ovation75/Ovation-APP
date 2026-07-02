@@ -19,6 +19,8 @@ import {
   PulsePressable,
   Rating,
 } from '../components/common';
+import { ProfileCompletion } from '../components/ProfileCompletion';
+import { computeProfileCompletion } from '../lib/profileCompletion';
 import { hapticSelect } from '../lib/haptics';
 import { shuffle } from '../lib/shuffle';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
@@ -186,9 +188,29 @@ export default function FeedScreen({ navigation }: Props) {
     currentUserId,
     refreshShows,
     myProfile,
+    preferences,
+    profileCompletionDismissed,
+    dismissProfileCompletion,
   } = useAppState();
 
   const openDrawer = () => navigation.dispatch(DrawerActions.openDrawer());
+
+  // Post-login, non-blocking completion prompt. Shows above the feed until the
+  // user completes the achievable items or dismisses it for the session.
+  const completion = computeProfileCompletion({
+    bio: myProfile?.bio,
+    preferredGenresCount: preferences.preferredGenres.length,
+  });
+  const showCompletionPrompt =
+    !!myProfile && !profileCompletionDismissed && !completion.complete;
+
+  const completionHeader = showCompletionPrompt ? (
+    <ProfileCompletion
+      completion={completion}
+      onNavigate={(target) => navigation.navigate(target)}
+      onDismiss={dismissProfileCompletion}
+    />
+  ) : null;
 
   // Pull-to-refresh: re-shuffles the still-mocked community/discovery/
   // editorial stream (no real ranked query exists for it yet) AND refetches
@@ -287,6 +309,7 @@ export default function FeedScreen({ navigation }: Props) {
         data={feed}
         keyExtractor={(item) => `${item.kind}-${item.id}`}
         renderItem={renderItem}
+        ListHeaderComponent={completionHeader}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={

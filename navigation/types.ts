@@ -40,6 +40,9 @@ export type RootStackParamList = {
   EditProfile: undefined;
   Notifications: undefined;
   Settings: undefined;
+  Preferences: undefined;
+  BlockedUsers: undefined;
+  ReportsSent: undefined;
   CategoryList: { category: string };
   PlaylistDetail: { playlistId: string; name?: string };
   // Log / rating flow (E05). No showId -> starts on the catalogue search step

@@ -11,7 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { RootStackScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
 import { AppHeader } from '../components/AppHeader';
-import { Avatar, Rating } from '../components/common';
+import { Avatar, Rating, StatusBadge, Skeleton } from '../components/common';
+import { ProfileCompletion } from '../components/ProfileCompletion';
+import { computeProfileCompletion } from '../lib/profileCompletion';
 import { shareProfile } from '../lib/share';
 import { hapticSelect } from '../lib/haptics';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
@@ -49,6 +51,7 @@ export default function MyProfileScreen({ navigation }: Props) {
     getShowById,
     showsLoading,
     notifications,
+    preferences,
   } = useAppState();
 
   const journal = useMemo(
@@ -99,7 +102,14 @@ export default function MyProfileScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <AppHeader title="Mon profil" variant="plain" onBack={() => navigation.goBack()} />
-        <ActivityIndicator style={styles.loading} color={colors.ink} />
+        <View style={styles.skeletonWrap}>
+          <Skeleton width={80} height={80} style={styles.skeletonCenter} />
+          <Skeleton width={140} height={26} style={styles.skeletonCenter} />
+          <Skeleton width={220} height={14} style={styles.skeletonCenter} />
+          <Skeleton width={90} height={20} radius={radius.full} style={styles.skeletonCenter} />
+          <Skeleton width="100%" height={72} style={styles.skeletonBlock} />
+          <Skeleton width="100%" height={44} style={styles.skeletonBlock} />
+        </View>
       </SafeAreaView>
     );
   }
@@ -114,6 +124,11 @@ export default function MyProfileScreen({ navigation }: Props) {
   }
 
   const { username, bio, isPublic } = myProfile;
+
+  const completion = computeProfileCompletion({
+    bio,
+    preferredGenresCount: preferences.preferredGenres.length,
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -139,10 +154,8 @@ export default function MyProfileScreen({ navigation }: Props) {
           <Avatar name={username} size={80} />
           <Text style={styles.username}>@{username}</Text>
           {bio ? <Text style={styles.bio}>{bio}</Text> : null}
-          <View style={[styles.badge, isPublic ? styles.badgePublic : styles.badgePrivate]}>
-            <Text style={[styles.badgeText, isPublic ? styles.badgeTextPublic : styles.badgeTextPrivate]}>
-              {isPublic ? 'Public' : 'Privé'}
-            </Text>
+          <View style={styles.badgeWrap}>
+            <StatusBadge status={isPublic ? 'public' : 'private'} />
           </View>
           <View style={styles.counts}>
             <Text style={styles.count}>
@@ -186,6 +199,17 @@ export default function MyProfileScreen({ navigation }: Props) {
             }}
           />
         </View>
+
+        {/* Profile completion — persistent nudge until the achievable items
+            (bio, preferences) are done. */}
+        {!completion.complete ? (
+          <View style={styles.completion}>
+            <ProfileCompletion
+              completion={completion}
+              onNavigate={(target) => navigation.navigate(target)}
+            />
+          </View>
+        ) : null}
 
         {/* Tabs */}
         <View style={styles.tabRow}>
@@ -360,19 +384,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
   },
-  badge: {
-    marginTop: spacing.sm,
-    borderWidth: border.rule,
-    borderColor: colors.ink,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs,
+  badgeWrap: { marginTop: spacing.sm },
+  completion: { marginTop: spacing.lg, marginHorizontal: spacing.lg },
+  skeletonWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.md,
+    alignItems: 'center',
   },
-  badgePublic: { backgroundColor: colors.acid },
-  badgePrivate: { backgroundColor: colors.ink },
-  badgeText: { ...type.micro },
-  badgeTextPublic: { color: colors.onAcid },
-  badgeTextPrivate: { color: colors.onInk },
+  skeletonCenter: { alignSelf: 'center' },
+  skeletonBlock: { alignSelf: 'stretch' },
   counts: {
     flexDirection: 'row',
     gap: spacing.lg,

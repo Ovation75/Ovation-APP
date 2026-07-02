@@ -73,6 +73,7 @@ export default function ProfileDrawerContent(props: DrawerContentComponentProps)
   // Root-stack routes: a navigate action bubbles up past the drawer to the
   // root stack when the drawer itself has no such route.
   const goToRoute = (name: string, params?: object) => {
+    hapticSelect();
     navigation.dispatch(CommonActions.navigate(name, params));
     navigation.closeDrawer();
   };
@@ -96,23 +97,25 @@ export default function ProfileDrawerContent(props: DrawerContentComponentProps)
     }
   };
 
-  const confirmSignOut = () =>
-    Alert.alert('Déconnexion', 'Se déconnecter de ton compte ?', [
+  const confirmSignOut = () => {
+    hapticSelect();
+    return Alert.alert('Déconnexion', 'Se déconnecter de ton compte ?', [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Se déconnecter', style: 'destructive', onPress: doSignOut },
     ]);
+  };
 
   const accountRows: RowDef[] = [
     { icon: '👤', label: 'Mon profil', onPress: () => goToRoute('MyProfile') },
     { icon: '✏️', label: 'Modifier mon profil', onPress: () => goToRoute('EditProfile') },
-    { icon: '🎚️', label: 'Préférences', onPress: comingSoon },
+    { icon: '🎚️', label: 'Préférences', onPress: () => goToRoute('Preferences') },
     {
       icon: '🔔',
       label: 'Notifications',
       onPress: () => goToRoute('Notifications'),
       badge: unreadCount,
     },
-    { icon: '🔒', label: 'Confidentialité', onPress: comingSoon },
+    { icon: '🔒', label: 'Confidentialité', onPress: () => goToRoute('Settings') },
     { icon: '❓', label: 'Aide', onPress: comingSoon },
     { icon: '⚙️', label: 'Paramètres', onPress: () => goToRoute('Settings') },
   ];

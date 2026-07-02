@@ -1,16 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
-  View,
 } from 'react-native';
 import type { RootStackScreenProps } from '../navigation/types';
 import { useAppState } from '../contexts/AppStateContext';
-import { hapticSelect } from '../lib/haptics';
+import { Section, Row, settingsStyles } from '../components/SettingsUI';
+import { Skeleton } from '../components/common';
 import { supabase } from '../lib/supabase';
 import { border, colors, radius, spacing, type } from '../theme/tokens';
 
@@ -18,57 +17,41 @@ type Props = RootStackScreenProps<'Settings'>;
 
 const APP_VERSION = '1.0.0';
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
-    </View>
-  );
-}
-
-function Row({
-  label,
-  value,
-  onPress,
-  right,
-  danger,
-}: {
-  label: string;
-  value?: string;
-  onPress?: () => void;
-  right?: ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      style={styles.row}
-      onPress={onPress}
-      disabled={!onPress && !right}
-    >
-      <Text style={[styles.rowLabel, danger && styles.danger]}>{label}</Text>
-      {right ?? (value ? <Text style={styles.rowValue}>{value}</Text> : null)}
-    </Pressable>
-  );
-}
-
+// Settings hub. Grouped into Account / Notifications / Privacy & safety / App /
+// Legal / Danger zone. Fine-grained toggles live in the separate Preferences
+// screen; this screen owns account identity, safety shortcuts (blocked users,
+// reports), and the account-level danger actions. Placeholders (download data,
+// delete account) are wired to confirm modals / "bientôt disponible" alerts —
+// no destructive backend action exists yet.
 export default function SettingsScreen({ navigation }: Props) {
-  // Notification toggles are centralized so they persist across navigation (E11).
-  const { notificationSettings, setNotificationSetting } = useAppState();
-  const toggleSetting = (key: 'push' | 'social' | 'editorial') => (v: boolean) => {
-    hapticSelect();
-    setNotificationSetting(key, v);
-  };
+  const { myProfile, refreshShows } = useAppState();
+  const [email, setEmail] = useState<string | null>(null);
+  const [loadingEmail, setLoadingEmail] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const noop = () =>
+  // Email lives on the auth user, not the profiles row — read it once.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      setEmail(data.user?.email ?? null);
+      setLoadingEmail(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const comingSoon = () =>
     Alert.alert('Bientôt disponible', 'Cette action sera bientôt disponible.');
+
+  const onRefreshCatalogue = async () => {
+    setRefreshing(true);
+    await refreshShows();
+    setRefreshing(false);
+    Alert.alert('Catalogue à jour', 'Le catalogue a été rechargé.');
+  };
 
   const confirmDelete = () =>
     Alert.alert(
@@ -79,7 +62,7 @@ export default function SettingsScreen({ navigation }: Props) {
         {
           text: 'Supprimer',
           style: 'destructive',
-          onPress: noop, // no-op for now
+          onPress: comingSoon, // no destructive backend action yet
         },
       ]
     );
@@ -100,82 +83,91 @@ export default function SettingsScreen({ navigation }: Props) {
     ]);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={settingsStyles.container}
+      contentContainerStyle={settingsStyles.content}
+    >
       <Section title="Mon compte">
-        <Row label="Prénom" value="Malo" onPress={noop} />
-        <Row label="E-mail" value="malo@exemple.com" onPress={noop} />
-        <Row label="Mot de passe" value="Modifier" onPress={noop} />
+        <Row
+          icon="✉️"
+          label="E-mail"
+          value={email ?? '—'}
+          right={loadingEmail ? <Skeleton width={140} height={14} /> : undefined}
+        />
+        <Row icon="@" label="Pseudo" value={myProfile ? `@${myProfile.username}` : '—'} />
+        <Row
+          icon="🔒"
+          label="Visibilité"
+          value={myProfile ? (myProfile.isPublic ? 'Public' : 'Privé') : '—'}
+        />
+        <Row
+          icon="✏️"
+          label="Modifier mon profil"
+          chevron
+          onPress={() => navigation.navigate('EditProfile')}
+          last
+        />
       </Section>
 
       <Section title="Notifications">
         <Row
-          label="Notifications push"
-          right={
-            <Switch
-              value={notificationSettings.push}
-              onValueChange={toggleSetting('push')}
-              trackColor={{ false: colors.stock, true: colors.acid }}
-              thumbColor={colors.ink}
-              ios_backgroundColor={colors.stock}
-            />
-          }
+          icon="🔔"
+          label="Préférences de notification"
+          chevron
+          onPress={() => navigation.navigate('Preferences')}
+          last
+        />
+      </Section>
+
+      <Section title="Confidentialité et sécurité">
+        <Row
+          icon="🚫"
+          label="Utilisateurs bloqués"
+          chevron
+          onPress={() => navigation.navigate('BlockedUsers')}
         />
         <Row
-          label="Activité sociale"
-          right={
-            <Switch
-              value={notificationSettings.social}
-              onValueChange={toggleSetting('social')}
-              trackColor={{ false: colors.stock, true: colors.acid }}
-              thumbColor={colors.ink}
-              ios_backgroundColor={colors.stock}
-            />
-          }
+          icon="🚩"
+          label="Signalements envoyés"
+          chevron
+          onPress={() => navigation.navigate('ReportsSent')}
         />
         <Row
-          label="Recommandations éditoriales"
-          right={
-            <Switch
-              value={notificationSettings.editorial}
-              onValueChange={toggleSetting('editorial')}
-              trackColor={{ false: colors.stock, true: colors.acid }}
-              thumbColor={colors.ink}
-              ios_backgroundColor={colors.stock}
-            />
-          }
+          icon="🎛️"
+          label="Préférences de confidentialité"
+          chevron
+          onPress={() => navigation.navigate('Preferences')}
         />
+        <Row icon="⬇️" label="Télécharger mes données" chevron onPress={comingSoon} />
+        <Row icon="🗑️" label="Supprimer mon compte" danger onPress={confirmDelete} last />
       </Section>
 
-      <Section title="Confidentialité">
-        <Row label="Télécharger mes données" onPress={noop} />
-        <Row label="Supprimer mon compte" danger onPress={confirmDelete} />
+      <Section title="Application">
+        <Row icon="🏷️" label="Version" value={APP_VERSION} />
+        <Row
+          icon="🔄"
+          label={refreshing ? 'Actualisation…' : 'Actualiser le catalogue'}
+          onPress={refreshing ? undefined : onRefreshCatalogue}
+        />
+        <Row icon="💬" label="Envoyer un avis / contact" chevron onPress={comingSoon} last />
       </Section>
 
-      <Section title="À propos">
-        <Row label="Version" value={APP_VERSION} />
-        <Row label="Conditions d'utilisation" onPress={noop} />
-        <Row label="Politique de confidentialité" onPress={noop} />
+      <Section title="Légal">
+        <Row icon="📄" label="Conditions d'utilisation" chevron onPress={comingSoon} />
+        <Row icon="🛡️" label="Politique de confidentialité" chevron onPress={comingSoon} />
+        <Row icon="📃" label="Licences" chevron onPress={comingSoon} last />
       </Section>
 
-      {/*
-        E12 (future) — internal admin/editorial workflows. Placeholders only for
-        now; a real admin panel will need Supabase + role-based access:
-          - Gestion du catalogue (add/edit/remove shows)
-          - Mise à jour hebdo des statuts (En ce moment / En tournée / Terminé)
-          - Sélection éditoriale (feed + reco de la semaine)
-          - Modération (reviews signalés, retrait de contenu, utilisateurs)
-      */}
-      <Section title="Espace interne (à venir)">
-        <Row label="Gestion du catalogue" value="À venir" onPress={noop} />
-        <Row label="Statuts hebdomadaires" value="À venir" onPress={noop} />
-        <Row label="Sélection éditoriale" value="À venir" onPress={noop} />
-        <Row label="Modération" value="À venir" onPress={noop} />
+      <Section title="Zone de danger">
+        <Row icon="🚪" label="Déconnexion" danger onPress={confirmSignOut} />
+        <Row icon="🗑️" label="Supprimer mon compte" danger onPress={confirmDelete} last />
       </Section>
 
       <Pressable
         style={styles.signOut}
         onPress={confirmSignOut}
         disabled={signingOut}
+        accessibilityRole="button"
       >
         <Text style={styles.signOutText}>
           {signingOut ? 'Déconnexion…' : 'Déconnexion'}
@@ -186,35 +178,6 @@ export default function SettingsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
-  content: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl },
-  section: { marginBottom: spacing.lg },
-  sectionTitle: {
-    ...type.labelSm,
-    color: colors.muted,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.bone,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.none,
-    borderWidth: border.rule,
-    borderColor: colors.ink,
-    paddingHorizontal: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    borderBottomWidth: border.hair,
-    borderBottomColor: colors.stock,
-    minHeight: 52,
-  },
-  rowLabel: { ...type.bodyMdMedium, fontSize: 15, color: colors.ink },
-  rowValue: { ...type.bodySm, color: colors.muted },
-  danger: { color: colors.signal },
   signOut: {
     marginTop: spacing.sm,
     marginHorizontal: spacing.md,

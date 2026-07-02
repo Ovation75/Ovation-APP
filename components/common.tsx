@@ -1,10 +1,11 @@
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
   Animated,
   Pressable,
   StyleSheet,
   Text,
   View,
+  type DimensionValue,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -183,6 +184,69 @@ export function PulsePressable({
   );
 }
 
+// Status badge (full pill, mono uppercase). Covers the profile visibility and
+// follow-request states used across profiles, cards and settings.
+export function StatusBadge({
+  status,
+  label,
+}: {
+  status: 'public' | 'private' | 'pending';
+  label?: string;
+}) {
+  const text =
+    label ??
+    (status === 'public' ? 'Public' : status === 'private' ? 'Privé' : 'En attente');
+  return (
+    <View style={[styles.statusBadge, styles[`statusBadge_${status}`]]}>
+      <Text style={[styles.statusBadgeText, styles[`statusBadgeText_${status}`]]}>
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+// Thin progress bar: stock track + acid fill inside a hard ink frame. `percent`
+// is clamped 0–100.
+export function ProgressBar({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width: `${clamped}%` }]} />
+    </View>
+  );
+}
+
+// Shimmering placeholder block for async/loading content. Loops opacity so a
+// loading profile/settings screen reads as "loading" rather than empty.
+export function Skeleton({
+  width = '100%',
+  height = 16,
+  radius: r = radius.none,
+  style,
+}: {
+  width?: DimensionValue;
+  height?: DimensionValue;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const opacity = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.9, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <Animated.View
+      style={[styles.skeleton, { width, height, borderRadius: r, opacity }, style]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   rating: {
     fontFamily: fonts.monoBold,
@@ -281,5 +345,35 @@ const styles = StyleSheet.create({
     ...type.button,
     fontSize: 13,
     color: colors.onSignal,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: border.rule,
+    borderColor: colors.ink,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  statusBadge_public: { backgroundColor: colors.acid },
+  statusBadge_private: { backgroundColor: colors.ink },
+  statusBadge_pending: { backgroundColor: colors.bone },
+  statusBadgeText: { ...type.micro },
+  statusBadgeText_public: { color: colors.onAcid },
+  statusBadgeText_private: { color: colors.onInk },
+  statusBadgeText_pending: { color: colors.ink },
+  progressTrack: {
+    height: 12,
+    backgroundColor: colors.stock,
+    borderWidth: border.rule,
+    borderColor: colors.ink,
+    borderRadius: radius.none,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.acid,
+  },
+  skeleton: {
+    backgroundColor: colors.stock,
   },
 });

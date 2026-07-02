@@ -75,6 +75,55 @@ export type NotificationSettings = {
   editorial: boolean;
 };
 
+// ---- User preferences (Découverte / Feed / Privacy / Notifications /
+// Accessibility) --------------------------------------------------------------
+// LOCAL-ONLY — there is no user_preferences table in the current schema, so
+// these live in-memory and reset on app restart (same gap pattern as
+// notificationSettings above). scripts/profile-preferences-schema.sql proposes
+// the table + columns that would let these persist; nothing is applied yet.
+export type ContentPreference = 'popular' | 'recent' | 'friends';
+
+export type Preferences = {
+  // Découverte
+  preferredGenres: string[]; // ShowGenre labels (multi-select)
+  preferredVenues: string[]; // venue names (multi-select)
+  contentPreference: ContentPreference;
+  // Feed
+  feedFriendActivity: boolean;
+  feedEditorial: boolean;
+  feedRecommendations: boolean;
+  // Privacy
+  showRatings: boolean;
+  showWishlist: boolean;
+  // Notifications
+  notifyApplause: boolean;
+  notifyComments: boolean;
+  notifyFollowRequests: boolean;
+  notifyEditorial: boolean;
+  // Accessibility
+  reducedMotion: boolean;
+  compactCards: boolean;
+  darkMode: boolean; // placeholder — no dark theme implemented yet
+};
+
+export const DEFAULT_PREFERENCES: Preferences = {
+  preferredGenres: [],
+  preferredVenues: [],
+  contentPreference: 'popular',
+  feedFriendActivity: true,
+  feedEditorial: true,
+  feedRecommendations: true,
+  showRatings: true,
+  showWishlist: false,
+  notifyApplause: true,
+  notifyComments: true,
+  notifyFollowRequests: true,
+  notifyEditorial: false,
+  reducedMotion: false,
+  compactCards: false,
+  darkMode: false,
+};
+
 // ---- Moderation -------------------------------------------------------------
 // Mirrors the real schema exactly:
 //   reports(reporter_id, target_type, target_id, reason, status)
@@ -207,6 +256,20 @@ type AppState = {
     key: keyof NotificationSettings,
     value: boolean
   ) => void;
+
+  // ---- User preferences (local-only — see Preferences type note) ----
+  preferences: Preferences;
+  setPreference: <K extends keyof Preferences>(
+    key: K,
+    value: Preferences[K]
+  ) => void;
+
+  // ---- Profile-completion prompt (session-local dismiss) ----
+  // The post-login Feed prompt sets this so it stays hidden for the rest of the
+  // session. Not persisted (no profile_completion_dismissed column yet — see
+  // scripts/profile-preferences-schema.sql), so it reappears on next launch.
+  profileCompletionDismissed: boolean;
+  dismissProfileCompletion: () => void;
 
   // ---- Applause on reviews (still mocked — no applause table in schema) ----
   getApplause: (reviewId: string, base: number) => number;
@@ -1059,6 +1122,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // ---- User preferences (local-only) --------------------------------------
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const setPreference = useCallback(
+    <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+      setPreferences((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
+
+  // ---- Profile-completion prompt dismiss (session-local) ------------------
+  const [profileCompletionDismissed, setProfileCompletionDismissed] =
+    useState(false);
+  const dismissProfileCompletion = useCallback(
+    () => setProfileCompletionDismissed(true),
+    []
+  );
+
   // ---- Applause (still local-only — no applause table in the schema) -------
   const [applauded, setApplauded] = useState<string[]>([]);
   const getApplause = useCallback(
@@ -1270,6 +1350,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deleteNotification,
       notificationSettings,
       setNotificationSetting,
+      preferences,
+      setPreference,
+      profileCompletionDismissed,
+      dismissProfileCompletion,
       getApplause,
       hasApplauded,
       toggleApplause,
@@ -1338,6 +1422,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       deleteNotification,
       notificationSettings,
       setNotificationSetting,
+      preferences,
+      setPreference,
+      profileCompletionDismissed,
+      dismissProfileCompletion,
       getApplause,
       hasApplauded,
       toggleApplause,
